@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Lock it</string>
+    <string name="accessibility_service_description">Allows the app to detect and lock protected apps for privacy.</string>
+</resources>

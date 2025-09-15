@@ -5,10 +5,14 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -16,30 +20,41 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Sort
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.engfred.lockit.R
-import com.engfred.lockit.domain.model.AppInfo
+import com.engfred.lockit.presentation.ui.components.AppItem
 import com.engfred.lockit.presentation.viewmodel.AppListViewModel
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppListScreen(viewModel: AppListViewModel = hiltViewModel()) {
-    val context = LocalContext.current
     val apps = viewModel.apps.collectAsState().value
     val coroutineScope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -197,91 +212,6 @@ fun AppListScreen(viewModel: AppListViewModel = hiltViewModel()) {
                     }
                 }
             }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun AppItem(app: AppInfo, onToggle: suspend () -> Unit) {
-    val coroutineScope = rememberCoroutineScope()
-
-    // Premium card with subtle elevation and rounded corners
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable {
-                // Allow tapping the card to toggle for better UX
-                coroutineScope.launch { onToggle() }
-            },
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 4.dp,
-            pressedElevation = 8.dp
-        ),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // App icon for modern app list feel
-            // Assuming AppInfo has icon as android.graphics.drawable.Drawable; use Image if Painter, or AsyncImage for remote
-            // For simplicity, using a placeholder; replace with actual app icon loading
-            Surface(
-                modifier = Modifier.size(40.dp),
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Security, // Placeholder; replace with app.icon if available
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            // App name with ellipsis for long names
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = app.name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                // Show lock status instead of package name
-                Text(
-                    text = if (app.isLocked) "Locked" else "Unlocked",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (app.isLocked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Enhanced switch with custom colors for locked state
-            Switch(
-                checked = app.isLocked,
-                onCheckedChange = { _ ->
-                    coroutineScope.launch { onToggle() }
-                },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = MaterialTheme.colorScheme.primary,
-                    checkedTrackColor = MaterialTheme.colorScheme.primaryContainer,
-                    uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            )
         }
     }
 }

@@ -1,25 +1,24 @@
 package com.engfred.lockit.presentation.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -42,13 +41,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.engfred.lockit.R
-import com.engfred.lockit.presentation.ui.components.AppItem
+import com.engfred.lockit.domain.model.AppInfo
+import com.engfred.lockit.presentation.ui.components.AppList
+import com.engfred.lockit.presentation.ui.components.SearchField
 import com.engfred.lockit.presentation.viewmodel.AppListViewModel
 import kotlinx.coroutines.launch
 
@@ -59,13 +59,31 @@ fun AppListScreen(viewModel: AppListViewModel = hiltViewModel()) {
     val coroutineScope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
-    // Sort state
-    var sortOrder by remember { mutableStateOf("A-Z") }
-    val sortedApps = remember(apps, sortOrder) {
+    // Search state
+    var query by remember { mutableStateOf("") }
+
+    // Default sort: show locked apps first (best UX for app locker)
+    var sortOrder by remember { mutableStateOf("Newest") }
+
+    // Filter
+    val filtered = remember(apps, query) {
+        if (query.isBlank()) apps
+        else {
+            val q = query.trim().lowercase()
+            apps.filter { it.name.lowercase().contains(q) || it.packageName.lowercase().contains(q) }
+        }
+    }
+
+    // Sort: locked-first default; other options available
+    val sortedApps = remember(filtered, sortOrder) {
         when (sortOrder) {
-            "A-Z" -> apps.sortedBy { it.name.lowercase() }
-            "Z-A" -> apps.sortedByDescending { it.name.lowercase() }
-            else -> apps
+            "LockedFirst" -> filtered.sortedWith(compareByDescending<AppInfo> { it.isLocked }
+                .thenByDescending { it.installTime })
+            "A-Z" -> filtered.sortedBy { it.name.lowercase() }
+            "Z-A" -> filtered.sortedByDescending { it.name.lowercase() }
+            "Newest" -> filtered.sortedByDescending { it.installTime }
+            "Oldest" -> filtered.sortedBy { it.installTime }
+            else -> filtered
         }
     }
 
@@ -75,7 +93,7 @@ fun AppListScreen(viewModel: AppListViewModel = hiltViewModel()) {
         }
     }
 
-    // Modern gradient background for premium feel
+    // Gradient
     val gradientBrush = Brush.verticalGradient(
         colors = listOf(
             MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.08f),
@@ -103,7 +121,7 @@ fun AppListScreen(viewModel: AppListViewModel = hiltViewModel()) {
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = { /* Handle back if needed */ }) {
+                    IconButton(onClick = { /* Handle back */ }) {
                         Icon(
                             imageVector = Icons.Default.Security,
                             contentDescription = "Security",
@@ -113,9 +131,9 @@ fun AppListScreen(viewModel: AppListViewModel = hiltViewModel()) {
                 },
                 actions = {
                     var expanded by remember { mutableStateOf(false) }
-                    IconButton(onClick = { expanded = true }) {
+                    IconButton(onClick = { expanded = !expanded }) {
                         Icon(
-                            imageVector = Icons.Default.Sort,
+                            imageVector = Icons.Default.FilterList,
                             contentDescription = "Sort",
                             tint = MaterialTheme.colorScheme.primary
                         )
@@ -125,18 +143,54 @@ fun AppListScreen(viewModel: AppListViewModel = hiltViewModel()) {
                         onDismissRequest = { expanded = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("A to Z") },
-                            onClick = {
-                                sortOrder = "A-Z"
-                                expanded = false
-                            }
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Newest (date added)")
+                                    Spacer(Modifier.width(5.dp))
+                                    if (sortOrder == "Newest") Icon(Icons.Rounded.CheckCircle, contentDescription = null)
+                                }
+                            },
+                            onClick = { sortOrder = "Newest"; expanded = false }
                         )
                         DropdownMenuItem(
-                            text = { Text("Z to A") },
-                            onClick = {
-                                sortOrder = "Z-A"
-                                expanded = false
-                            }
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Oldest (date added)")
+                                    Spacer(Modifier.width(5.dp))
+                                    if (sortOrder == "Oldest") Icon(Icons.Rounded.CheckCircle, contentDescription = null)
+                                }
+                            },
+                            onClick = { sortOrder = "Oldest"; expanded = false }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Locked first")
+                                    Spacer(Modifier.width(5.dp))
+                                    if (sortOrder == "LockedFirst") Icon(Icons.Rounded.CheckCircle, contentDescription = null)
+                                }
+                            },
+                            onClick = { sortOrder = "LockedFirst"; expanded = false }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("A to Z")
+                                    Spacer(Modifier.width(5.dp))
+                                    if (sortOrder == "A-Z") Icon(Icons.Rounded.CheckCircle, contentDescription = null)
+                                }
+                            },
+                            onClick = { sortOrder = "A-Z"; expanded = false }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Z to A")
+                                    Spacer(Modifier.width(5.dp))
+                                    if (sortOrder == "Z-A") Icon(Icons.Rounded.CheckCircle, contentDescription = null)
+                                }
+                            },
+                            onClick = { sortOrder = "Z-A"; expanded = false }
                         )
                     }
                 },
@@ -155,61 +209,59 @@ fun AppListScreen(viewModel: AppListViewModel = hiltViewModel()) {
                 .padding(padding)
                 .background(gradientBrush)
         ) {
-            if (apps.isEmpty()) {
-                // Empty state for premium UX
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.ic_lock_open), // Assume you have this drawable
-                            contentDescription = null,
-                            modifier = Modifier
-                                .size(64.dp)
-                                .padding(bottom = 16.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "No apps available",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Apps will appear here once loaded",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            } else {
-                LazyColumn(
-                    state = listState,
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Search field (rounded corners)
+                SearchField(
+                    query = query,
+                    onQueryChange = { query = it },
+                    onClear = { query = "" },
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(vertical = 20.dp)
-                ) {
-                    items(
-                        items = sortedApps,
-                        key = { it.packageName }
-                    ) { app ->
-                        // Animated entry for modern feel
-                        AnimatedVisibility(
-                            visible = true,
-                            enter = fadeIn() + scaleIn(initialScale = 0.95f),
-                            exit = fadeOut() + scaleOut(targetScale = 0.95f)
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                )
+
+                if (sortedApps.isEmpty()) {
+                    // Empty state
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
                         ) {
-                            AppItem(
-                                app = app,
-                                onToggle = { coroutineScope.launch { viewModel.toggleLock(app) } }
+                            Icon(
+                                painter = painterResource(id = R.drawable.ic_lock_open),
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .padding(bottom = 16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = if (apps.isEmpty()) "No apps available" else "No apps match your search",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (apps.isEmpty()) "Apps will appear here once loaded" else "Try a different search or clear the filter",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
+                } else {
+                    // App list (modular component)
+                    AppList(
+                        apps = sortedApps,
+                        onToggle = { app -> coroutineScope.launch { viewModel.toggleLock(app) } },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        listState = listState
+                    )
                 }
             }
         }

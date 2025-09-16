@@ -38,6 +38,7 @@
             android:excludeFromRecents="true"
             android:noHistory="true"
             android:taskAffinity=""
+            android:screenOrientation="portrait"
             android:theme="@style/Theme.LockIt.Fullscreen" />
 
         <service

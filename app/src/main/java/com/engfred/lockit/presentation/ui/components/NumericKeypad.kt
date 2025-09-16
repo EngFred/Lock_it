@@ -1,22 +1,29 @@
 package com.engfred.lockit.presentation.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.Modifier
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Backspace
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 
 @Composable
 fun NumericKeypad(
@@ -26,7 +33,11 @@ fun NumericKeypad(
     onSubmit: (() -> Unit)? = null
 ) {
     val haptic = LocalHapticFeedback.current
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(10.dp), // Increased spacing for premium feel
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         val rows = listOf(
             listOf(1, 2, 3),
             listOf(4, 5, 6),
@@ -34,7 +45,7 @@ fun NumericKeypad(
         )
 
         rows.forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { // Wider spacing for touch-friendliness
                 row.forEach { n ->
                     KeyButton(number = n, onClick = {
                         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -44,9 +55,9 @@ fun NumericKeypad(
             }
         }
 
-        // last row: [spacer] [0] [backspace]
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(72.dp)) { /* spacer to align */ }
+        // Last row: [spacer] [0] [backspace]
+        Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.size(80.dp)) { /* Spacer to align */ }
 
             KeyButton(number = 0, onClick = {
                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -59,13 +70,13 @@ fun NumericKeypad(
                     onBackspace()
                 },
                 modifier = Modifier
-                    .size(72.dp)
+                    .size(80.dp) // Larger for better touch
                     .semantics { contentDescription = "Backspace" }
             ) {
                 Icon(
                     imageVector = Icons.Default.Backspace,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurface
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant // Softer tint for professionalism
                 )
             }
         }
@@ -74,19 +85,37 @@ fun NumericKeypad(
 
 @Composable
 private fun KeyButton(number: Int, onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (isPressed) 0.92f else 1f, label = "keyScale") // Subtle press animation for addictive feedback
+
     Surface(
         modifier = Modifier
-            .size(72.dp)
-            .clickable { onClick() }
+            .size(70.dp) // Larger keys for modern, touch-friendly UX
+            .scale(scale)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null // Custom indication via scale
+            ) { onClick() }
             .semantics { contentDescription = "Key $number" },
         shape = CircleShape,
-        tonalElevation = 2.dp,
+        tonalElevation = 4.dp, // Slightly higher elevation for premium depth
         color = MaterialTheme.colorScheme.surfaceVariant
     ) {
-        Box(contentAlignment = Alignment.Center) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.background(
+                brush = Brush.radialGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f),
+                        MaterialTheme.colorScheme.surfaceVariant
+                    )
+                )
+            ) // Subtle gradient for modern, addictive shine
+        ) {
             Text(
                 text = "$number",
-                style = MaterialTheme.typography.headlineSmall.copy(fontSize = 22.sp),
+                style = MaterialTheme.typography.headlineMedium.copy(fontSize = 28.sp), // Larger font for professionalism
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center
             )

@@ -44,6 +44,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.NavController
 import com.engfred.lockit.presentation.ui.components.NumericKeypad
 import com.engfred.lockit.presentation.ui.components.PermissionView
@@ -71,20 +73,20 @@ import kotlinx.coroutines.launch
 @Composable
 fun SetupScreen(navController: NavController, viewModel: SetupViewModel = hiltViewModel()) {
     val context = LocalContext.current
-    var primaryPin by remember { mutableStateOf("") }
-    var confirmPin by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf<String?>(null) }
+    var primaryPin by rememberSaveable { mutableStateOf("") }
+    var confirmPin by rememberSaveable { mutableStateOf("") }
+    var error by rememberSaveable { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
     val maxDigits = 6
 
     // active step: 0 = enter primary, 1 = confirm
-    var activeField by remember { mutableIntStateOf(0) }
+    var activeField by rememberSaveable { mutableIntStateOf(0) }
 
     // Permissions: re-evaluate on resume
-    val isAccessibilityEnabled = remember { mutableStateOf(AccessibilityUtils.isAccessibilityServiceEnabled(context, AppLockerService::class.java)) }
-    val hasUsageStatsPermission = remember { mutableStateOf(hasUsageAccess(context)) }
+    val isAccessibilityEnabled = rememberSaveable { mutableStateOf(AccessibilityUtils.isAccessibilityServiceEnabled(context, AppLockerService::class.java)) }
+    val hasUsageStatsPermission = rememberSaveable { mutableStateOf(hasUsageAccess(context)) }
 
-    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
@@ -166,7 +168,7 @@ fun SetupScreen(navController: NavController, viewModel: SetupViewModel = hiltVi
         }
     }
 
-    //show a toast incase of an error
+    //show a toast in case of an error
     LaunchedEffect(error) {
         if (error != null) {
             // show error toast

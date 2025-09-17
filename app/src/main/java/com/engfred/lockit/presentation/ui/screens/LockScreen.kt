@@ -1,7 +1,6 @@
 package com.engfred.lockit.presentation.ui.screens
 
 import android.app.Activity
-import android.content.pm.PackageManager
 import android.graphics.BitmapFactory
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -25,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,7 +55,7 @@ import kotlin.math.roundToInt
 fun LockScreen(viewModel: LockViewModel, unlockEventBus: UnlockEventBus) {
     val context = LocalContext.current
     val lockedPackage = (context as Activity).intent.getStringExtra("locked_package")
-    var pin by remember { mutableStateOf("") }
+    var pin by rememberSaveable { mutableStateOf("") }
     val coroutineScope = rememberCoroutineScope()
 
     // Prevent back

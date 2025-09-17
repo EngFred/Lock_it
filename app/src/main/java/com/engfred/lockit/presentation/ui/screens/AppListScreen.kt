@@ -16,10 +16,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -38,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,10 +66,10 @@ fun AppListScreen(
     val listState = rememberLazyListState()
 
     // Search state
-    var query by remember { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
 
     // Default sort: show locked apps first (best UX for app locker)
-    var sortOrder by remember { mutableStateOf("Newest") }
+    var sortOrder by rememberSaveable { mutableStateOf("Newest") }
 
     // Filter and sort based on data from UiState.Success
     val (filtered, sortedApps) = remember(uiState, query, sortOrder) {

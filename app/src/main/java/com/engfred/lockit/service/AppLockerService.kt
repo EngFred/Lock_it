@@ -15,7 +15,7 @@ import android.view.inputmethod.InputMethodManager
 import androidx.core.app.NotificationCompat
 import com.engfred.lockit.LockItApplication
 import com.engfred.lockit.MainActivity
-import com.engfred.lockit.presentation.ui.screens.LockScreenActivity
+import com.engfred.lockit.presentation.ui.LockScreenActivity
 import com.engfred.lockit.domain.usecase.GetLockedAppsUseCase
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope

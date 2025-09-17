@@ -25,10 +25,10 @@ class LockScreenActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Secure flags
+        // Secure flags - prevents screenshots of lock screen and keeps it on
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE or WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        // Show on lock screen & turn screen on where appropriate
+        // Show on lock screen & turn screen on
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)

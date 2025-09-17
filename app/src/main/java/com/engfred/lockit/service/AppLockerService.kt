@@ -38,26 +38,20 @@ class AppLockerService : AccessibilityService() {
     private val scope = CoroutineScope(Job() + Dispatchers.IO)
     private var lockedApps: List<String> = emptyList()
 
-    // The package currently considered foreground (last processed "real" focused package)
     private var previousPackage: String? = null
 
-    // Temporarily unlocked package (cleared when the user actually backgrounds the app)
     @Volatile
     private var lastUnlockedPackage: String? = null
 
-    // throttle map: package -> last lock attempt timestamp (ms)
     private val lastLockAttempt = ConcurrentHashMap<String, Long>()
 
-    // Packages to ignore (IME packages & system UI only)
     private val ignoredPackages = mutableSetOf<String>()
 
     override fun onCreate() {
         super.onCreate()
 
-        // Build initial ignored packages: include system UI and IMEs (but NOT our own package)
         refreshIgnoredPackages()
 
-        // Collect locked apps (flow)
         scope.launch {
             try {
                 getLockedAppsUseCase().collectLatest {
@@ -69,12 +63,11 @@ class AppLockerService : AccessibilityService() {
             }
         }
 
-        // Subscribe to unlock events - non-blocking update of lastUnlockedPackage
         scope.launch {
             try {
                 unlockEventBus.events.collectLatest { packageName ->
                     lastUnlockedPackage = packageName
-                    Log.d(TAG, "Temporarily unlocked from event bus: $packageName")
+                    Log.d(TAG, "Temporarily unlocked: $packageName")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error collecting unlock events", e)
@@ -82,28 +75,19 @@ class AppLockerService : AccessibilityService() {
         }
     }
 
-    /**
-     * Refresh the set of packages we should ignore (keyboards / input methods + system UI).
-     * NOTE: we DO NOT add our own package here to avoid missing important events.
-     */
     private fun refreshIgnoredPackages() {
         try {
             ignoredPackages.clear()
-
-            // Add common system UI package
             ignoredPackages.add("com.android.systemui")
 
-            // Add enabled input method packages (keyboards)
             val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
             val enabledImes: List<InputMethodInfo> = imm?.enabledInputMethodList ?: emptyList()
             for (imi in enabledImes) {
-                try {
-                    val pkg = imi.packageName
-                    if (!pkg.isNullOrBlank()) ignoredPackages.add(pkg)
-                } catch (_: Exception) { /* ignore per-IME failures */ }
+                val pkg = imi.packageName
+                if (!pkg.isNullOrBlank()) ignoredPackages.add(pkg)
             }
 
-            Log.d(TAG, "Ignored packages (IME/system): $ignoredPackages")
+            Log.d(TAG, "Ignored packages: $ignoredPackages")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to refresh ignored packages", e)
         }
@@ -121,43 +105,32 @@ class AppLockerService : AccessibilityService() {
 
         try {
             startForeground(NOTIF_ID, createNotification())
-            Log.d(TAG, "Service connected and started foreground")
+            Log.d(TAG, "Service connected and foreground started")
         } catch (e: Exception) {
-            Log.e(TAG, "Error starting foreground in onServiceConnected", e)
+            Log.e(TAG, "Error starting foreground", e)
         }
     }
 
-    /**
-     * Compute the actual package owning the focused (top) application window.
-     * This is more reliable than trusting event.packageName because many events come
-     * from IMEs, overlays, or background windows.
-     */
     private fun getTopFocusedPackage(): String? {
         return try {
             val winList: List<AccessibilityWindowInfo> = windows ?: return null
-            // Prefer the focused application window
             for (w in winList) {
-                try {
-                    if (w.isFocused && w.type == AccessibilityWindowInfo.TYPE_APPLICATION) {
-                        val root = w.root
-                        val pkg = root?.packageName?.toString()
-                        if (!pkg.isNullOrBlank()) return pkg
-                    }
-                } catch (_: Exception) { /* ignore individual window failures */ }
+                if (w.isFocused && w.type == AccessibilityWindowInfo.TYPE_APPLICATION) {
+                    val root = w.root
+                    val pkg = root?.packageName?.toString()
+                    if (!pkg.isNullOrBlank()) return pkg
+                }
             }
-            // Fallback: first application window with a package
             for (w in winList) {
-                try {
-                    if (w.type == AccessibilityWindowInfo.TYPE_APPLICATION) {
-                        val root = w.root
-                        val pkg = root?.packageName?.toString()
-                        if (!pkg.isNullOrBlank()) return pkg
-                    }
-                } catch (_: Exception) { /* ignore */ }
+                if (w.type == AccessibilityWindowInfo.TYPE_APPLICATION) {
+                    val root = w.root
+                    val pkg = root?.packageName?.toString()
+                    if (!pkg.isNullOrBlank()) return pkg
+                }
             }
             null
         } catch (e: Exception) {
-            Log.e(TAG, "Error reading windows for top-focused package", e)
+            Log.e(TAG, "Error getting top-focused package", e)
             null
         }
     }
@@ -166,64 +139,47 @@ class AppLockerService : AccessibilityService() {
         event ?: return
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
 
-        // First try to get the real focused package from windows
         val focusedPackage = getTopFocusedPackage()
         val eventPkg = event.packageName?.toString()
         val className = event.className?.toString()
 
-        // If className looks like an IME or overlay, ignore it early
         if (!className.isNullOrBlank() &&
             (className.contains("InputMethod", ignoreCase = true) || className.contains("IME", ignoreCase = true))
         ) {
-            Log.d(TAG, "Ignoring event from IME-like class: $className (pkg: $eventPkg)")
+            Log.v(TAG, "Ignoring IME-like class: $className (pkg: $eventPkg)")
             return
         }
 
-        // If event package is an ignored package, ignore
         if (!eventPkg.isNullOrBlank() && ignoredPackages.contains(eventPkg)) {
-            Log.d(TAG, "Ignoring event from ignored package: $eventPkg")
+            Log.v(TAG, "Ignoring ignored package: $eventPkg")
             return
         }
 
-        // Decide which package we actually treat as the "current foreground package".
-        // Prefer the focusedPackage (from windows). If it's null, fall back to the event package.
-        val currentPkg = when {
-            !focusedPackage.isNullOrBlank() -> focusedPackage
-            !eventPkg.isNullOrBlank() -> eventPkg
-            else -> null
-        } ?: return
+        val currentPkg = focusedPackage ?: eventPkg ?: return
 
-        // Special handling for our own package: ignore specific internal windows to prevent loops,
-        // but do not globally ignore our package (we must react when user opens our app).
+        // For own package: Ignore only LockScreenActivity to prevent loops; process others (e.g., MainActivity) for self-locking
         if (currentPkg == packageName) {
-            if (!className.isNullOrBlank()) {
-                val lower = className.lowercase()
-                if (lower.contains("lockscreen") || lower.contains("lockscreenactivity") || lower.contains("setup") || lower.contains("mainactivity")) {
-                    Log.d(TAG, "Ignoring our internal UI window: $className")
-                    return
-                }
+            if (!className.isNullOrBlank() && className.lowercase().contains("lockscreen")) {
+                Log.v(TAG, "Ignoring lock screen UI: $className")
+                return
             }
-            Log.d(TAG, "Received event from our package (will process): $className")
+            Log.d(TAG, "Processing own package event: $className")
         }
 
-        // If same package as previous, nothing to do (debounce frequent internal window changes).
         if (currentPkg == previousPackage) return
 
-        // Detect "previous app moved to background" -> if the previous app was temporarily unlocked, clear unlock.
         val prev = previousPackage
         if (prev != null && lockedApps.contains(prev) && prev == lastUnlockedPackage && currentPkg != prev) {
-            // User moved away from the unlocked app (to a real different app) -> clear temporary unlock (re-lock)
             lastUnlockedPackage = null
-            Log.d(TAG, "Re-locking $prev after background (foreground now: $currentPkg)")
+            Log.d(TAG, "Re-locking $prev after backgrounding (new foreground: $currentPkg)")
         }
 
-        // If the newly foregrounded app is locked and it's not temporarily unlocked, show lock screen.
         if (lockedApps.contains(currentPkg) && currentPkg != lastUnlockedPackage) {
             val now = System.currentTimeMillis()
             val lastAttempt = lastLockAttempt[currentPkg] ?: 0L
             if (now - lastAttempt > LOCK_THROTTLE_MS) {
                 lastLockAttempt[currentPkg] = now
-                Log.d(TAG, "Locking app: $currentPkg")
+                Log.d(TAG, "Launching lock for: $currentPkg")
                 val intent = Intent(this, LockScreenActivity::class.java).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                     putExtra("locked_package", currentPkg)
@@ -231,14 +187,13 @@ class AppLockerService : AccessibilityService() {
                 try {
                     startActivity(intent)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to start LockScreenActivity for $currentPkg", e)
+                    Log.e(TAG, "Failed to launch lock screen for $currentPkg", e)
                 }
             } else {
-                Log.d(TAG, "Skipping lock attempt for $currentPkg (throttled)")
+                Log.v(TAG, "Throttled lock for $currentPkg")
             }
         }
 
-        // update previousPackage to the newly foregrounded package (only non-ignored packages reach here)
         previousPackage = currentPkg
     }
 
@@ -274,6 +229,10 @@ class AppLockerService : AccessibilityService() {
     companion object {
         private const val TAG = "AppLockerService"
         private const val NOTIF_ID = 1
-        private const val LOCK_THROTTLE_MS = 800L // minimum time between lock attempts for same package
+        private const val LOCK_THROTTLE_MS = 800L
+
+        private fun String.containsAny(vararg substrings: String): Boolean {
+            return substrings.any { this.contains(it, ignoreCase = true) }
+        }
     }
 }

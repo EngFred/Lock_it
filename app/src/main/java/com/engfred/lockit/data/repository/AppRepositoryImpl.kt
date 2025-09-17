@@ -25,6 +25,7 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
 import javax.inject.Inject
+import androidx.core.graphics.createBitmap
 
 class AppRepositoryImpl @Inject constructor(
     private val database: AppDatabase,
@@ -57,7 +58,9 @@ class AppRepositoryImpl @Inject constructor(
      * Icon lookup order:
      * 1) in-memory LRU cache
      * 2) disk cache (cacheDir/app_icons/<pkg>.png)
-     * 3) generate from drawable -> store to disk & memory
+     * 3) generate from ResolveInfo.loadIcon(pm) -> store to disk & memory
+     *
+     * Uses ResolveInfo.loadIcon(pm) to get the launcher-specific icon, which may differ from the application icon.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun getInstalledApps(): Flow<List<AppInfo>> {
@@ -69,12 +72,14 @@ class AppRepositoryImpl @Inject constructor(
                     val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
                     val resolveInfos = pm.queryIntentActivities(intent, PackageManager.GET_META_DATA)
 
-                    val packageNames = resolveInfos
-                        .mapNotNull { it.activityInfo?.packageName }
-                        .distinct()
+                    // Group by package name to handle rare cases of multiple launchers per package
+                    val groupedResolveInfos = resolveInfos.groupBy { it.activityInfo.packageName }
 
-                    val apps = packageNames.mapNotNull { pkg ->
-                        // skip our own package
+                    val apps = groupedResolveInfos.mapNotNull { entry ->
+                        val pkg = entry.key
+                        val ri = entry.value.firstOrNull() ?: return@mapNotNull null
+
+                        // Skip our own package
                         if (pkg == context.packageName) return@mapNotNull null
 
                         try {
@@ -83,9 +88,9 @@ class AppRepositoryImpl @Inject constructor(
                             // Only include enabled apps
                             if (!ai.enabled) return@mapNotNull null
 
-                            val label = pm.getApplicationLabel(ai)?.toString() ?: pkg
+                            val label = ri.loadLabel(pm)?.toString() ?: pkg
 
-                            // package info: firstInstallTime (guarded)
+                            // Package info: firstInstallTime (guarded)
                             val installTime: Long = try {
                                 val pi = pm.getPackageInfo(pkg, 0)
                                 pi?.firstInstallTime ?: 0L
@@ -102,26 +107,26 @@ class AppRepositoryImpl @Inject constructor(
                                 if (diskFile.exists()) {
                                     try {
                                         iconBytes = diskFile.readBytes()
-                                        // put into memory cache for faster future access
+                                        // Put into memory cache for faster future access
                                         memoryCache.put(pkg, iconBytes)
                                     } catch (t: Throwable) {
-                                        // ignore read failures, we'll regenerate
+                                        // Ignore read failures, we'll regenerate
                                         Log.w(TAG, "Failed reading disk cache for $pkg", t)
                                     }
                                 }
                             }
 
-                            // If still null, fetch drawable and convert (then persist)
+                            // If still null, fetch from ResolveInfo.loadIcon and convert (then persist)
                             if (iconBytes == null) {
                                 val iconDrawable: Drawable? = try {
-                                    pm.getApplicationIcon(pkg)
+                                    ri.loadIcon(pm)
                                 } catch (e: Exception) {
                                     null
                                 }
 
                                 iconBytes = iconDrawable?.let { drawableToPngBytes(it) }
 
-                                // persist to disk & memory if we got bytes
+                                // Persist to disk & memory if we got bytes
                                 if (iconBytes != null) {
                                     try {
                                         val diskFile = File(iconsCacheDir, "$pkg.png")
@@ -147,7 +152,7 @@ class AppRepositoryImpl @Inject constructor(
                         }
                     }
 
-                    // sort by installTime (newest first), then apply locked mapping
+                    // Sort by installTime (newest first), then apply locked mapping
                     apps.sortedByDescending { it.installTime }
                         .map { app -> app.copy(isLocked = lockedPackages.contains(app.packageName)) }
 
@@ -171,6 +176,8 @@ class AppRepositoryImpl @Inject constructor(
 
     override suspend fun setPin(hashedPin: String): Boolean {
         database.authDao().insert(AuthCredentialEntity(hashedPin = hashedPin))
+        // Auto-lock own app for self-protection after PIN is set
+        lockApp(context.packageName)
         return true
     }
 
@@ -195,7 +202,7 @@ class AppRepositoryImpl @Inject constructor(
                 else -> {
                     val width = if (drawable.intrinsicWidth > 0) drawable.intrinsicWidth else 48
                     val height = if (drawable.intrinsicHeight > 0) drawable.intrinsicHeight else 48
-                    val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                    val bmp = createBitmap(width, height)
                     val canvas = Canvas(bmp)
                     drawable.setBounds(0, 0, canvas.width, canvas.height)
                     drawable.draw(canvas)

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -16,10 +17,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Sort
-import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -50,12 +50,13 @@ import com.engfred.lockit.domain.model.AppInfo
 import com.engfred.lockit.presentation.ui.components.AppList
 import com.engfred.lockit.presentation.ui.components.SearchField
 import com.engfred.lockit.presentation.viewmodel.AppListViewModel
+import com.engfred.lockit.presentation.viewmodel.UiState
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppListScreen(viewModel: AppListViewModel = hiltViewModel()) {
-    val apps = viewModel.apps.collectAsState().value
+    val uiState by viewModel.uiState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
@@ -65,25 +66,26 @@ fun AppListScreen(viewModel: AppListViewModel = hiltViewModel()) {
     // Default sort: show locked apps first (best UX for app locker)
     var sortOrder by remember { mutableStateOf("Newest") }
 
-    // Filter
-    val filtered = remember(apps, query) {
-        if (query.isBlank()) apps
-        else {
-            val q = query.trim().lowercase()
-            apps.filter { it.name.lowercase().contains(q) || it.packageName.lowercase().contains(q) }
-        }
-    }
-
-    // Sort: locked-first default; other options available
-    val sortedApps = remember(filtered, sortOrder) {
-        when (sortOrder) {
-            "LockedFirst" -> filtered.sortedWith(compareByDescending<AppInfo> { it.isLocked }
-                .thenByDescending { it.installTime })
-            "A-Z" -> filtered.sortedBy { it.name.lowercase() }
-            "Z-A" -> filtered.sortedByDescending { it.name.lowercase() }
-            "Newest" -> filtered.sortedByDescending { it.installTime }
-            "Oldest" -> filtered.sortedBy { it.installTime }
-            else -> filtered
+    // Filter and sort based on data from UiState.Success
+    val (filtered, sortedApps) = remember(uiState, query, sortOrder) {
+        when (uiState) {
+            is UiState.Success -> {
+                val apps = (uiState as UiState.Success<List<AppInfo>>).data
+                val filtered = if (query.isBlank()) apps else {
+                    val q = query.trim().lowercase()
+                    apps.filter { it.name.lowercase().contains(q) || it.packageName.lowercase().contains(q) }
+                }
+                val sorted = when (sortOrder) {
+                    "LockedFirst" -> filtered.sortedWith(compareByDescending<AppInfo> { it.isLocked }.thenByDescending { it.installTime })
+                    "A-Z" -> filtered.sortedBy { it.name.lowercase() }
+                    "Z-A" -> filtered.sortedByDescending { it.name.lowercase() }
+                    "Newest" -> filtered.sortedByDescending { it.installTime }
+                    "Oldest" -> filtered.sortedBy { it.installTime }
+                    else -> filtered
+                }
+                Pair(filtered, sorted)
+            }
+            else -> Pair(emptyList(), emptyList())
         }
     }
 
@@ -220,48 +222,92 @@ fun AppListScreen(viewModel: AppListViewModel = hiltViewModel()) {
                         .padding(horizontal = 16.dp, vertical = 12.dp)
                 )
 
-                if (sortedApps.isEmpty()) {
-                    // Empty state
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
+                when (uiState) {
+                    is UiState.Loading -> {
+                        // Loading state with indicator
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                painter = painterResource(id = R.drawable.ic_lock_open),
-                                contentDescription = null,
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(48.dp),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "Loading apps...",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                    is UiState.Success -> {
+                        if (sortedApps.isEmpty()) {
+                            // True empty state (no apps or no matches after loading)
+                            Box(
                                 modifier = Modifier
-                                    .size(64.dp)
-                                    .padding(bottom = 16.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = if (apps.isEmpty()) "No apps available" else "No apps match your search",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = if (apps.isEmpty()) "Apps will appear here once loaded" else "Try a different search or clear the filter",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    .fillMaxSize()
+                                    .padding(horizontal = 16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_lock_open),
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .size(64.dp)
+                                            .padding(bottom = 16.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = if (filtered.isEmpty()) "No apps match your search" else "No apps available",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = if (filtered.isEmpty()) "Try a different search or clear the filter" else "Apps will appear here once loaded",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        } else {
+                            // App list
+                            AppList(
+                                apps = sortedApps,
+                                onToggle = { app -> coroutineScope.launch { viewModel.toggleLock(app) } },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                                listState = listState
                             )
                         }
                     }
-                } else {
-                    // App list (modular component)
-                    AppList(
-                        apps = sortedApps,
-                        onToggle = { app -> coroutineScope.launch { viewModel.toggleLock(app) } },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        listState = listState
-                    )
+                    is UiState.Error -> {
+                        // Error state (rare, but handled)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = (uiState as UiState.Error).message,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
                 }
             }
         }

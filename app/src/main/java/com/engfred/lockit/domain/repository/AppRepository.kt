@@ -12,4 +12,5 @@ interface AppRepository {
     suspend fun setPin(hashedPin: String): Boolean
     suspend fun validatePin(hashedPin: String): Boolean
     suspend fun getAuthCredential(): AuthCredential?
+    suspend fun updatePin(newHashedPin: String): Boolean
 }

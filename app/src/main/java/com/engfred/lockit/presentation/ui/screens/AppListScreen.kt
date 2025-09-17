@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
@@ -28,6 +29,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,6 +47,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavController
 import com.engfred.lockit.R
 import com.engfred.lockit.domain.model.AppInfo
 import com.engfred.lockit.presentation.ui.components.AppList
@@ -55,7 +58,10 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppListScreen(viewModel: AppListViewModel = hiltViewModel()) {
+fun AppListScreen(
+    viewModel: AppListViewModel = hiltViewModel(),
+    navController: NavController? = null
+) {
     val uiState by viewModel.uiState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
     val listState = rememberLazyListState()
@@ -105,9 +111,9 @@ fun AppListScreen(viewModel: AppListViewModel = hiltViewModel()) {
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
+            TopAppBar(
                 title = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column {
                         Text(
                             text = "Select Apps to Lock",
                             style = MaterialTheme.typography.headlineSmall,
@@ -122,16 +128,17 @@ fun AppListScreen(viewModel: AppListViewModel = hiltViewModel()) {
                         )
                     }
                 },
-                navigationIcon = {
-                    IconButton(onClick = { /* Handle back */ }) {
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                ),
+                actions = {
+                    IconButton(onClick = { navController?.navigate("settings") }) {
                         Icon(
-                            imageVector = Icons.Default.Security,
-                            contentDescription = "Security",
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
-                },
-                actions = {
                     var expanded by remember { mutableStateOf(false) }
                     IconButton(onClick = { expanded = !expanded }) {
                         Icon(
@@ -196,10 +203,6 @@ fun AppListScreen(viewModel: AppListViewModel = hiltViewModel()) {
                         )
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                ),
                 modifier = Modifier.clip(RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp))
             )
         },

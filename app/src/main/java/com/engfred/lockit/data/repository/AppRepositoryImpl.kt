@@ -178,6 +178,8 @@ class AppRepositoryImpl @Inject constructor(
         database.authDao().insert(AuthCredentialEntity(hashedPin = hashedPin))
         // Auto-lock own app for self-protection after PIN is set
         lockApp(context.packageName)
+        // Auto-lock Settings to prevent bypass via clear data, force stop, or admin deactivation
+        lockApp("com.android.settings")
         return true
     }
 
@@ -189,6 +191,12 @@ class AppRepositoryImpl @Inject constructor(
     override suspend fun getAuthCredential(): AuthCredential? {
         val entity = database.authDao().get()
         return entity?.let { AuthCredential(it.id, it.hashedPin) }
+    }
+
+    override suspend fun updatePin(newHashedPin: String): Boolean {
+        val entity = database.authDao().get() ?: return false
+        database.authDao().insert(AuthCredentialEntity(id = entity.id, hashedPin = newHashedPin))
+        return true
     }
 
     /**

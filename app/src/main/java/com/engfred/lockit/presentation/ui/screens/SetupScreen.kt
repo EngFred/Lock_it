@@ -171,6 +171,7 @@ fun SetupScreen(navController: NavController, viewModel: SetupViewModel = hiltVi
         if (error != null) {
             // show error toast
             Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
+            error = null
         }
     }
 

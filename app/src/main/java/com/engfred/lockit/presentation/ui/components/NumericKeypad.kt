@@ -87,11 +87,11 @@ fun NumericKeypad(
 private fun KeyButton(number: Int, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (isPressed) 0.92f else 1f, label = "keyScale") // Subtle press animation for addictive feedback
+    val scale by animateFloatAsState(if (isPressed) 0.92f else 1f, label = "keyScale")
 
     Surface(
         modifier = Modifier
-            .size(70.dp) // Larger keys for modern, touch-friendly UX
+            .size(70.dp)
             .scale(scale)
             .clickable(
                 interactionSource = interactionSource,
@@ -99,7 +99,7 @@ private fun KeyButton(number: Int, onClick: () -> Unit) {
             ) { onClick() }
             .semantics { contentDescription = "Key $number" },
         shape = CircleShape,
-        tonalElevation = 4.dp, // Slightly higher elevation for premium depth
+        tonalElevation = 4.dp,
         color = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Box(
@@ -111,11 +111,11 @@ private fun KeyButton(number: Int, onClick: () -> Unit) {
                         MaterialTheme.colorScheme.surfaceVariant
                     )
                 )
-            ) // Subtle gradient for modern, addictive shine
+            )
         ) {
             Text(
                 text = "$number",
-                style = MaterialTheme.typography.headlineMedium.copy(fontSize = 28.sp), // Larger font for professionalism
+                style = MaterialTheme.typography.headlineMedium.copy(fontSize = 28.sp),
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center
             )
